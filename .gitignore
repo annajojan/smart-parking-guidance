@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Environments and secrets
+.env
+*.local
+
+# Data produced by the pipeline (keep folder structure)
+data/outputs/*
+!data/outputs/.gitkeep
+data/samples/*
+!data/samples/.gitkeep
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+.DS_Store
+
+# YOLO weights
+*.pt
+*.onnx
+*.engine
+
+# Notebooks cache
+.ipynb_checkpoints/

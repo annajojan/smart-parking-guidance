@@ -1,0 +1,3 @@
+# Optional: YOLOv8 object detector for higher-accuracy, real-world detection.
+# Requires PyTorch. Install only if you want the YOLO detection backend.
+ultralytics>=8.2.0
