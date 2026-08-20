@@ -44,5 +44,3 @@ models/*.bin
 models/*.ckpt
 *.safetensors
 
-# Demo video (record separately)
-demo/*.mp4
