@@ -1,2 +1,16 @@
+# Core dependencies
 numpy>=1.26,<3
-opencv-python>=4.8,<5
+opencv-python>=4.8
+
+# Web interface
+streamlit>=1.28,<2
+
+# Local LLM (Ollama runs separately, no Python package needed)
+# Install Ollama from: https://ollama.com/download
+
+# Local image generation (Stable Diffusion)
+diffusers>=0.25
+transformers>=4.35
+accelerate>=0.25
+torch>=2.0
+pillow>=10.0

@@ -1,4 +1,4 @@
-"""End-to-end pipeline: frame -> detections -> structured data -> guidance."""
+"""End-to-end pipeline: frame -> detections -> structured data -> guidance + image."""
 
 from __future__ import annotations
 
@@ -24,6 +24,7 @@ class PipelineResult:
 
     occupancy: OccupancyFrame
     guidance: Optional[GuidanceResult] = None
+    generated_image: Optional[object] = None  # PIL Image or numpy array
     files: dict = field(default_factory=dict)
 
 
@@ -57,24 +58,27 @@ class VideoResult:
 
 
 class ParkingPipeline:
-    """Coordinates the computer-vision and guidance components."""
+    """Coordinates the computer-vision, guidance, and image-generation components."""
 
     def __init__(
         self,
         map_path: str | Path,
         detector: Optional[BaseDetector] = None,
         guidance: Optional[BaseGuidance] = None,
+        image_generator=None,
     ) -> None:
         load_env_file()
         self.parking_map = ParkingMap.from_file(map_path)
         self.detector = detector or RegionDetector(self.parking_map)
         self.guidance = guidance or RuleBasedGuidance()
+        self.image_generator = image_generator
 
     def process_frame(
         self,
         frame,
         source: str = "frame",
         generate_guidance: bool = True,
+        generate_image: bool = False,
         timestamp: Optional[str] = None,
     ) -> PipelineResult:
         detections = self.detector.detect(frame)
@@ -87,6 +91,13 @@ class ParkingPipeline:
         result = PipelineResult(occupancy=occupancy)
         if generate_guidance:
             result.guidance = self.guidance.generate(occupancy, self.parking_map)
+        if generate_image and self.image_generator is not None:
+            try:
+                result.generated_image = self.image_generator.generate(
+                    occupancy, self.parking_map
+                )
+            except Exception:
+                result.generated_image = None
         return result
 
     def process_image(self, image_path: str | Path, out_dir: str | Path, overlay: bool = True) -> PipelineResult:

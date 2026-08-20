@@ -33,3 +33,16 @@ Thumbs.db
 
 # Notebooks cache
 .ipynb_checkpoints/
+
+# Hugging Face cache (model weights downloaded on first use)
+.cache/
+cache/
+
+# Large model files (downloaded separately, see models/README.md)
+models/*.safetensors
+models/*.bin
+models/*.ckpt
+*.safetensors
+
+# Demo video (record separately)
+demo/*.mp4

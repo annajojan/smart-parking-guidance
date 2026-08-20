@@ -2,189 +2,291 @@
 
 An AI-powered smart-parking system that uses **camera-based computer vision** to
 detect available and occupied parking slots in real time, converts the detection
-results into **structured data**, and passes them to an **LLM (or a deterministic
-fallback)** to generate clear, human-friendly parking directions.
+results into **structured data**, and passes them to **local AI models** (LLM +
+image generation) to generate clear, human-friendly parking directions and
+visualizations.
 
-The goal: reduce the time drivers spend searching for a spot, cut congestion and
-emissions, and improve the overall parking experience.
+**No cloud AI APIs are required.** All AI inference runs locally on your machine.
 
 ---
 
-## How it works
+## Problem Statement
 
-```
-                 ┌──────────────────────────────────────────────┐
- Camera frame ──▶│ 1. Vehicle detection (computer vision)       │
-                 │    - RegionDetector (per-slot, offline)      │
-                 │    - SaturationDetector (colour blobs)       │
-                 │    - YOLOv8 (optional, higher accuracy)      │
-                 └─────────────────────┬────────────────────────┘
-                                       │ bounding boxes
-                                       ▼
-                 ┌──────────────────────────────────────────────┐
-                 │ 2. Slot occupancy matching (geometry)        │
-                 │    boxes are matched to slot polygons and    │
-                 │    each slot is labelled available/occupied  │
-                 │    with a confidence score                   │
-                 └─────────────────────┬────────────────────────┘
-                                       │ structured JSON
-                                       ▼
-                 ┌──────────────────────────────────────────────┐
-                 │ 3. Guidance generation (LLM)                 │
-                 │    LLM prompt built from the structured data │
-                 │    -> "Park in A3, second bay on your left"  │
-                 │    Rule-based fallback works fully offline   │
-                 └─────────────────────┬────────────────────────┘
-                                       │
-                                       ▼
-                    Annotated image + occupancy.json + guidance.txt
-```
+Drivers waste significant time searching for parking spaces, leading to
+ congestion, increased emissions, and poor user experience. This system uses
+ CCTV cameras and computer vision to identify occupied and available parking
+ spaces in real time and provides intelligent guidance to drivers toward
+ available parking spaces.
 
-**Pipeline stages** (see `src/pipeline.py`):
+## Motivation
 
-1. **Computer vision** – `src/detectors/` turns each camera frame into a list of
-   vehicle bounding boxes (`Detection`).
-2. **Structured data** – `src/occupancy.py` matches boxes against the slot
-   polygons defined in `config/parking_map.json` and produces a structured
-   `OccupancyFrame` (available/occupied per slot + confidence).
-3. **LLM guidance** – `src/guidance/` builds a prompt from the structured data and
-   asks an OpenAI-compatible LLM for friendly step-by-step directions.
-   `RuleBasedGuidance` is the deterministic offline fallback.
+- Reduce time drivers spend searching for parking
+- Cut traffic congestion and emissions in parking facilities
+- Improve overall parking experience
+- Demonstrate local AI inference without cloud dependencies
+
+## Objectives
+
+1. Detect vehicle presence in parking slots using computer vision
+2. Classify each slot as available or occupied
+3. Generate natural-language parking guidance using a local LLM
+4. Generate parking visualization images using a local image generation model
+5. Provide a clean web interface for demonstration
 
 ## Features
 
-- Real-time slot occupancy detection from images, videos or generated scenes
+- Real-time slot occupancy detection from images, videos, or generated scenes
 - Three detection backends:
-  - `region` – per-slot interior edge-density analysis (default, offline, standard for aerial parking views)
-  - `saturation` – colour-based foreground segmentation into car boxes
-  - `yolo` – Ultralytics YOLOv8 for highest accuracy on real footage (optional)
+  - `region` – per-slot interior edge-density analysis (default, offline)
+  - `saturation` – colour-based foreground segmentation
+  - `yolo` – Ultralytics YOLOv8 for highest accuracy (optional)
 - Structured, JSON-serialisable occupancy output with confidence scores
-- LLM-generated parking directions (OpenAI-compatible API) with an automatic
-  rule-based fallback
+- **Local LLM guidance** via Ollama (Llama 3.1) – no cloud API required
+- **Local image generation** via Stable Diffusion – no cloud API required
 - Annotated output images/videos with color-coded slots
-- Synthetic scene generator for demos, tests and CI
-- Video analysis with slot state-change (free ⇄ occupied) event tracking
-- Full test suite + GitHub Actions CI
+- Synthetic scene generator for demos, tests, and CI
+- Video analysis with slot state-change event tracking
+- Streamlit web interface for easy demonstration
 
-## Project structure
+## System Architecture
 
 ```
-.
+┌─────────────────────────────────────────────────────────────────────┐
+│                    SMART PARKING GUIDANCE SYSTEM                     │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌──────────────┐
+│  CCTV /      │
+│  Image /     │
+│  Video       │
+└──────┬───────┘
+       │
+       ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  1. Vehicle Detection (src/detectors/)                               │
+│     • RegionDetector (edge density)                                  │
+│     • SaturationDetector (color blobs)                               │
+│     • YOLOv8 (deep learning, optional)                               │
+└───────────────────────────┬─────────────────────────────────────────┘
+                            │ bounding boxes
+                            ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  2. Occupancy Detection (src/occupancy.py)                          │
+│     • Match detections to slot polygons                              │
+│     • Label: AVAILABLE / OCCUPIED                                    │
+│     • Output: OccupancyFrame (structured JSON)                      │
+└───────────────────────────┬─────────────────────────────────────────┘
+                            │ structured data
+                            ├────────────────────────┐
+                            │                        │
+                            ▼                        ▼
+┌──────────────────────┐  ┌──────────────────────────────────────┐
+│  3a. Local LLM       │  │  3b. Local Image Generation          │
+│  (Ollama + Llama 3.1)│  │  (Stable Diffusion)                  │
+│                      │  │                                      │
+│  Input: Real         │  │  Input: Occupancy data               │
+│  occupancy JSON      │  │  Output: Parking visualization       │
+│  Output: Natural     │  │  image                               │
+│  language guidance   │  │                                      │
+└──────────┬───────────┘  └──────────────────┬───────────────────┘
+           │                                 │
+           ▼                                 ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  4. Final Output                                                     │
+│     • Annotated image with slot status                               │
+│     • AI-generated parking guidance text                             │
+│     • AI-generated parking visualization image                       │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+## Workflow
+
+```
+CCTV Feed / Image Upload / Video Upload
+        │
+        ▼
+Vehicle Detection (RegionDetector / YOLOv8)
+        │
+        ▼
+Occupancy Matching (per-slot classification)
+        │
+        ├────────────────────────┐
+        │                        │
+        ▼                        ▼
+   Local LLM               Local Image Generation
+   (Ollama)                (Stable Diffusion)
+        │                        │
+        ▼                        ▼
+   Text Guidance            Visualization Image
+        │                        │
+        └────────┬───────────────┘
+                 │
+                 ▼
+        Final Smart Parking Result
+```
+
+## Technologies
+
+| Component | Technology | Description |
+|-----------|-----------|-------------|
+| Vehicle Detection | OpenCV + RegionDetector | Edge-density per-slot analysis |
+| Vehicle Detection (alt) | YOLOv8 | Deep learning vehicle detection |
+| Occupancy Detection | Custom geometry matching | Intersection-over-slot + polygon test |
+| Text Generation | Ollama + Llama 3.1 | Local LLM, no cloud API |
+| Image Generation | Stable Diffusion v1.5 | Local image generation, no cloud API |
+| Web Interface | Streamlit | Interactive web demo |
+| Language | Python 3.10+ | Core implementation |
+
+## Project Structure
+
+```
+smart-parking-guidance/
 ├── app.py                        # CLI entry point
+├── streamlit_app.py              # Web interface
 ├── config/
-│   └── parking_map.json          # slot polygons, zones, entrances
-├── data/
-│   ├── inputs/                   # your own images/videos go here
-│   ├── outputs/                  # results (occupancy, guidance, overlays)
-│   └── samples/                  # generated synthetic scenes
+│   └── parking_map.json          # Slot polygons, zones, entrances
 ├── src/
-│   ├── config.py                 # parking map loading
-│   ├── scene_generator.py        # synthetic parking-lot renderer
-│   ├── detectors/                # CV detectors (region, saturation, yolo)
-│   ├── occupancy.py              # structured data model + slot matcher
-│   ├── guidance/                 # rule-based + LLM generators
-│   ├── visualizer.py             # annotated overlay rendering
-│   └── pipeline.py               # end-to-end pipeline
-└── tests/                        # pytest suite
+│   ├── config.py                 # Parking map loading
+│   ├── scene_generator.py        # Synthetic parking-lot renderer
+│   ├── detectors/                # CV detectors
+│   │   ├── region_detector.py    # Edge-density detector
+│   │   ├── saturation_detector.py# Color-based detector
+│   │   └── yolo_detector.py      # YOLOv8 detector
+│   ├── occupancy.py              # Structured data + slot matcher
+│   ├── guidance/                 # Guidance generators
+│   │   ├── rule_based.py         # Deterministic directions
+│   │   └── llm.py                # Ollama local LLM
+│   ├── image_generation/         # Image generation
+│   │   └── stable_diffusion.py   # Stable Diffusion generator
+│   ├── visualizer.py             # Annotated overlay rendering
+│   └── pipeline.py               # End-to-end pipeline
+├── models/
+│   └── README.md                 # Model download instructions
+├── data/
+│   ├── inputs/                   # Your images/videos
+│   ├── outputs/                  # Pipeline results
+│   └── samples/                  # Generated synthetic scenes
+├── docs/
+│   ├── architecture.md           # System architecture
+│   ├── workflow.md               # Workflow diagrams
+│   └── screenshots/              # Application screenshots
+├── demo/
+│   └── demo.mp4                  # Demo video
+└── tests/                        # Test suite
 ```
 
-## Getting started
+## Installation
 
-**Requirements:** Python 3.10+ (tested on 3.12).
+### Prerequisites
+
+- Python 3.10+ (tested on 3.12)
+- Ollama (for local LLM)
+- ~9 GB disk space for AI models
+
+### Step 1: Clone and set up Python environment
 
 ```bash
-# 1. Create a virtual environment
+git clone https://github.com/annajojan/smart-parking-guidance.git
+cd smart-parking-guidance
+
 python -m venv .venv
 # Windows:
 .venv\Scripts\activate
 # Linux/macOS:
 source .venv/bin/activate
 
-# 2. Install dependencies
 pip install -r requirements.txt
-
-# 3. (Optional) dev dependencies for running the tests
-pip install -r requirements-dev.txt
 ```
+
+### Step 2: Install Ollama (Local LLM)
+
+1. Download from https://ollama.com/download
+2. Install and start the server:
+   ```bash
+   ollama serve
+   ```
+3. Pull the Llama 3.1 model:
+   ```bash
+   ollama pull llama3.1
+   ```
+
+### Step 3: Download Stable Diffusion (Local Image Generation)
+
+The model downloads automatically on first use (~4 GB). To pre-download:
+
+```python
+from diffusers import StableDiffusionPipeline
+pipe = StableDiffusionPipeline.from_pretrained("stable-diffusion-v1-5")
+```
+
+See `models/README.md` for detailed instructions.
 
 ## Usage
 
+### CLI
+
 ```bash
-# Generate 3 synthetic scenes, detect occupancy, and print guidance
+# Generate synthetic scenes and detect occupancy
 python app.py --mode synthetic --samples 3 --seed 42
 
-# Process one of your own images
-python app.py --mode image --source data/inputs/my_lot.png
+# Process an image with Ollama LLM guidance
+python app.py --mode image --source data/inputs/my_lot.png --guidance llm
 
-# Process an image with the YOLO detector (requires requirements-optional.txt)
-python app.py --mode image --source data/inputs/my_lot.png --detector yolo
-
-# Analyse a video and track slot state changes
+# Analyse a video
 python app.py --mode video --source data/inputs/my_lot.mp4
 
-# Use the LLM for guidance (requires an API key, see below)
-python app.py --mode synthetic --guidance llm
+# Use YOLO detector (requires ultralytics)
+python app.py --mode image --source data/inputs/my_lot.png --detector yolo
 ```
 
-### Example output
-
-```
-=== Synthetic scene 1 (scene_01.png) ===
-Ground truth occupied: A1, A2, B1, B3, B4
-Free: 3/8 | Occupied: 5/8
-  A1  FULL conf=0.93
-  A2  FULL conf=0.96
-  A3  FREE conf=1.0
-  A4  FREE conf=1.0
-  B1  FULL conf=0.94
-  B2  FREE conf=1.0
-  B3  FULL conf=0.95
-  B4  FULL conf=0.91
-
-Guidance [rule]:
-Good news — 3 of 8 spots are currently free. The nearest free spot is A3 in
-Zone A, on your left, about 7 metres ahead. Drive down the aisle and take the
-third bay on your left. Pull in carefully — the spot is waiting for you.
-
-  occupancy_json:   data/outputs/scene_01_occupancy.json
-  guidance_txt:     data/outputs/scene_01_guidance.txt
-  annotated_image:  data/outputs/scene_01_annotated.png
-```
-
-Files written to `data/outputs/`:
-
-| File | Contents |
-|---|---|
-| `*_occupancy.json` | Structured occupancy data (per-slot status + confidence) |
-| `*_guidance.txt` | Human-friendly parking directions + source |
-| `*_annotated.png` | Frame overlay: green = free, red = occupied |
-| `*_summary.json` | Video mode: slot state-change events |
-
-## Using the LLM
-
-The LLM generator calls any OpenAI-compatible `/chat/completions` endpoint
-(OpenAI, Azure, Groq, Ollama, llama.cpp, ...). Configuration is read from the
-environment or a `.env` file:
+### Web Interface (Streamlit)
 
 ```bash
-# .env (never commit this file)
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini
-# OPENAI_BASE_URL=https://api.openai.com/v1   # default
+streamlit run streamlit_app.py
 ```
 
-If the LLM call fails (no key, offline, timeout), the system **automatically
-falls back** to the rule-based generator and reports it in the guidance source,
-e.g. `rule (LLM unavailable: URLError)`.
+Opens browser at `http://localhost:8501`.
 
-## Extending to your own parking lot
+### Demo Steps
 
-1. Create a map JSON like `config/parking_map.json`: set the image size, lot
-   bounds, entrances and the polygon of every parking slot.
-2. Point the pipeline at it with `--map path/to/your_map.json`.
-3. Use the `yolo` detector for best results on real camera footage, or tune the
-   `RegionDetector` / `SaturationDetector` parameters (see
-   `src/detectors/`) for your camera angle.
+1. Open the web interface
+2. Upload a parking-lot image (try `data/samples/scene_01.png`)
+3. Click "Analyze Parking"
+4. View results:
+   - Original vs annotated image
+   - Occupancy metrics
+   - Slot details table
+   - AI guidance text (from Ollama)
+   - AI generated visualization (from Stable Diffusion)
+
+## Screenshots
+
+See `docs/screenshots/` for application screenshots.
+
+## Demo Video
+
+See `demo/demo.mp4` for a recorded demonstration.
+
+## Configuration
+
+### Parking Map
+
+Edit `config/parking_map.json` to define your parking lot:
+- Image size
+- Slot polygons (bird's-eye coordinates)
+- Zones and levels
+- Entrances
+- Drive lane boundaries
+
+### Environment Variables
+
+Create a `.env` file (never commit this):
+
+```bash
+# Ollama LLM configuration
+OLLAMA_BASE_URL=http://localhost:11434/v1
+OLLAMA_MODEL=llama3.1
+```
 
 ## Tests
 
@@ -192,9 +294,22 @@ e.g. `rule (LLM unavailable: URLError)`.
 pytest -v
 ```
 
-The suite covers the detection→slot matcher, the rule-based guidance, the scene
-generator, the full end-to-end pipeline, and the LLM→rule fallback. CI runs the
-tests plus a demo and uploads the generated artifacts.
+## Limitations
+
+- Requires sufficient disk space for AI models (~9 GB)
+- Stable Diffusion runs slowly on CPU (~30-120 seconds per image)
+- YOLOv8 requires PyTorch and a GPU for real-time performance
+- Parking slot polygons must be defined manually for each lot
+- Synthetic scenes are simplified representations of real parking lots
+
+## Future Improvements
+
+- Real-time CCTV video stream processing
+- Mobile app interface
+- Multi-floor parking support
+- Integration with parking payment systems
+- Real-time occupancy tracking dashboard
+- Support for more image generation models (FLUX, SDXL)
 
 ## License
 

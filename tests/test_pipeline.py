@@ -1,6 +1,6 @@
 import json
 
-from src.guidance.llm import LLMGuidance
+from src.guidance.llm import OllamaGuidance
 from src.guidance.rule_based import RuleBasedGuidance
 from src.pipeline import ParkingPipeline
 from src.scene_generator import generate_scene, save_scene
@@ -29,8 +29,7 @@ def test_end_to_end_synthetic(parking_map, map_path, tmp_path):
 
 def test_llm_fallback_to_rule(parking_map, map_path):
     pipeline = ParkingPipeline(map_path=map_path)
-    llm = LLMGuidance(
-        api_key="invalid-key",
+    llm = OllamaGuidance(
         base_url="http://127.0.0.1:1",
         timeout=3,
         fallback=RuleBasedGuidance(),

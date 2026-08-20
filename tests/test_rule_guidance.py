@@ -7,7 +7,7 @@ def test_full_lot_message(parking_map):
 
     result = RuleBasedGuidance().generate(build_occupancy(parking_map, all_taken), parking_map)
     assert result.source == "rule"
-    assert "Sorry" in result.text
+    assert "No parking slots are currently available." in result.text
 
 
 def test_single_free_slot_mentioned(parking_map):
@@ -25,7 +25,9 @@ def test_partial_occupancy_counts(parking_map):
     from src.guidance.rule_based import RuleBasedGuidance
 
     result = RuleBasedGuidance().generate(build_occupancy(parking_map, statuses), parking_map)
-    assert "6 of 8" in result.text
+    assert "Total Slots: 8" in result.text
+    assert "Occupied: 2" in result.text
+    assert "Available: 6" in result.text
 
 
 def test_deterministic(parking_map):

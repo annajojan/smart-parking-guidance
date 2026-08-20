@@ -16,10 +16,10 @@ ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.config import ParkingMap
+from src.config import ParkingMap, load_env_file
 from src.detectors.region_detector import RegionDetector
 from src.detectors.saturation_detector import SaturationDetector
-from src.guidance.llm import LLMGuidance
+from src.guidance.llm import OllamaGuidance
 from src.guidance.rule_based import RuleBasedGuidance
 from src.pipeline import ParkingPipeline
 from src.scene_generator import generate_scene, save_scene
@@ -48,6 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def build_pipeline(args: argparse.Namespace) -> ParkingPipeline:
+    load_env_file()
     parking_map = ParkingMap.from_file(args.map)
 
     if args.detector == "saturation":
@@ -64,7 +65,7 @@ def build_pipeline(args: argparse.Namespace) -> ParkingPipeline:
         detector = RegionDetector(parking_map)
 
     if args.guidance == "llm":
-        guidance = LLMGuidance(fallback=RuleBasedGuidance())
+        guidance = OllamaGuidance(fallback=RuleBasedGuidance())
     else:
         guidance = RuleBasedGuidance()
 
