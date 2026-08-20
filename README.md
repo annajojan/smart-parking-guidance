@@ -2,11 +2,8 @@
 
 An AI-powered smart-parking system that uses **camera-based computer vision** to
 detect available and occupied parking slots in real time, converts the detection
-results into **structured data**, and passes them to **local AI models** (LLM +
-image generation) to generate clear, human-friendly parking directions and
-visualizations.
-
-**No cloud AI APIs are required.** All AI inference runs locally on your machine.
+results into **structured data**, and passes them to a **local LLM** to generate
+clear, standardized parking guidance.
 
 ---
 
@@ -23,15 +20,13 @@ Drivers waste significant time searching for parking spaces, leading to
 - Reduce time drivers spend searching for parking
 - Cut traffic congestion and emissions in parking facilities
 - Improve overall parking experience
-- Demonstrate local AI inference without cloud dependencies
 
 ## Objectives
 
 1. Detect vehicle presence in parking slots using computer vision
 2. Classify each slot as available or occupied
-3. Generate natural-language parking guidance using a local LLM
-4. Generate parking visualization images using a local image generation model
-5. Provide a clean web interface for demonstration
+3. Generate standardized parking guidance using a local LLM
+4. Provide a clean web interface for demonstration
 
 ## Features
 
@@ -41,12 +36,9 @@ Drivers waste significant time searching for parking spaces, leading to
   - `saturation` – colour-based foreground segmentation
   - `yolo` – Ultralytics YOLOv8 for highest accuracy (optional)
 - Structured, JSON-serialisable occupancy output with confidence scores
-- **Local LLM guidance** via Ollama (Llama 3.1) – no cloud API required
-- **Local image generation** via Stable Diffusion – no cloud API required
+- **Local LLM guidance** via Ollama (Llama 3.1)
+- Standardized SMARTPARK parking guidance template
 - Annotated output images/videos with color-coded slots
-- Synthetic scene generator for demos, tests, and CI
-- Video analysis with slot state-change event tracking
-- Streamlit web interface for easy demonstration
 
 ## System Architecture
 
@@ -77,25 +69,18 @@ Drivers waste significant time searching for parking spaces, leading to
 │     • Output: OccupancyFrame (structured JSON)                      │
 └───────────────────────────┬─────────────────────────────────────────┘
                             │ structured data
-                            ├────────────────────────┐
-                            │                        │
-                            ▼                        ▼
-┌──────────────────────┐  ┌──────────────────────────────────────┐
-│  3a. Local LLM       │  │  3b. Local Image Generation          │
-│  (Ollama + Llama 3.1)│  │  (Stable Diffusion)                  │
-│                      │  │                                      │
-│  Input: Real         │  │  Input: Occupancy data               │
-│  occupancy JSON      │  │  Output: Parking visualization       │
-│  Output: Natural     │  │  image                               │
-│  language guidance   │  │                                      │
-└──────────┬───────────┘  └──────────────────┬───────────────────┘
-           │                                 │
-           ▼                                 ▼
+                            ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  3. Local LLM (Ollama + Llama 3.1)                                  │
+│     Input: Real occupancy JSON                                       │
+│     Output: Standardized parking guidance text                       │
+└───────────────────────────┬─────────────────────────────────────────┘
+                            │
+                            ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │  4. Final Output                                                     │
 │     • Annotated image with slot status                               │
-│     • AI-generated parking guidance text                             │
-│     • AI-generated parking visualization image                       │
+│     • Standardized parking guidance text                             │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -110,19 +95,11 @@ Vehicle Detection (RegionDetector / YOLOv8)
         ▼
 Occupancy Matching (per-slot classification)
         │
-        ├────────────────────────┐
-        │                        │
-        ▼                        ▼
-   Local LLM               Local Image Generation
-   (Ollama)                (Stable Diffusion)
-        │                        │
-        ▼                        ▼
-   Text Guidance            Visualization Image
-        │                        │
-        └────────┬───────────────┘
-                 │
-                 ▼
-        Final Smart Parking Result
+        ▼
+Local LLM (Ollama)
+        │
+        ▼
+Standardized Parking Guidance
 ```
 
 ## Technologies
@@ -132,8 +109,7 @@ Occupancy Matching (per-slot classification)
 | Vehicle Detection | OpenCV + RegionDetector | Edge-density per-slot analysis |
 | Vehicle Detection (alt) | YOLOv8 | Deep learning vehicle detection |
 | Occupancy Detection | Custom geometry matching | Intersection-over-slot + polygon test |
-| Text Generation | Ollama + Llama 3.1 | Local LLM, no cloud API |
-| Image Generation | Stable Diffusion v1.5 | Local image generation, no cloud API |
+| Text Generation | Ollama + Llama 3.1 | Local LLM |
 | Web Interface | Streamlit | Interactive web demo |
 | Language | Python 3.10+ | Core implementation |
 
@@ -156,22 +132,15 @@ smart-parking-guidance/
 │   ├── guidance/                 # Guidance generators
 │   │   ├── rule_based.py         # Deterministic directions
 │   │   └── llm.py                # Ollama local LLM
-│   ├── image_generation/         # Image generation
-│   │   └── stable_diffusion.py   # Stable Diffusion generator
 │   ├── visualizer.py             # Annotated overlay rendering
 │   └── pipeline.py               # End-to-end pipeline
-├── models/
-│   └── README.md                 # Model download instructions
 ├── data/
 │   ├── inputs/                   # Your images/videos
 │   ├── outputs/                  # Pipeline results
 │   └── samples/                  # Generated synthetic scenes
 ├── docs/
 │   ├── architecture.md           # System architecture
-│   ├── workflow.md               # Workflow diagrams
-│   └── screenshots/              # Application screenshots
-├── demo/
-│   └── demo.mp4                  # Demo video
+│   └── workflow.md               # Workflow diagrams
 └── tests/                        # Test suite
 ```
 
@@ -181,7 +150,6 @@ smart-parking-guidance/
 
 - Python 3.10+ (tested on 3.12)
 - Ollama (for local LLM)
-- ~9 GB disk space for AI models
 
 ### Step 1: Clone and set up Python environment
 
@@ -209,17 +177,6 @@ pip install -r requirements.txt
    ```bash
    ollama pull llama3.1
    ```
-
-### Step 3: Download Stable Diffusion (Local Image Generation)
-
-The model downloads automatically on first use (~4 GB). To pre-download:
-
-```python
-from diffusers import StableDiffusionPipeline
-pipe = StableDiffusionPipeline.from_pretrained("stable-diffusion-v1-5")
-```
-
-See `models/README.md` for detailed instructions.
 
 ## Usage
 
@@ -256,16 +213,7 @@ Opens browser at `http://localhost:8501`.
    - Original vs annotated image
    - Occupancy metrics
    - Slot details table
-   - AI guidance text (from Ollama)
-   - AI generated visualization (from Stable Diffusion)
-
-## Screenshots
-
-See `docs/screenshots/` for application screenshots.
-
-## Demo Video
-
-See `demo/demo.mp4` for a recorded demonstration.
+   - Parking guidance text
 
 ## Configuration
 
@@ -296,8 +244,6 @@ pytest -v
 
 ## Limitations
 
-- Requires sufficient disk space for AI models (~9 GB)
-- Stable Diffusion runs slowly on CPU (~30-120 seconds per image)
 - YOLOv8 requires PyTorch and a GPU for real-time performance
 - Parking slot polygons must be defined manually for each lot
 - Synthetic scenes are simplified representations of real parking lots
@@ -309,7 +255,6 @@ pytest -v
 - Multi-floor parking support
 - Integration with parking payment systems
 - Real-time occupancy tracking dashboard
-- Support for more image generation models (FLUX, SDXL)
 
 ## License
 
